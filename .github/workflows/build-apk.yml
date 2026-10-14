@@ -8,8 +8,23 @@ on:
         required: true
         type: string
       chat_id:
-        description: Telegram private chat ID to receive the APK
+        description: Telegram chat ID
         required: true
+        type: string
+      features:
+        description: Comma-separated features
+        required: false
+        default: ""
+        type: string
+      template:
+        description: Template key
+        required: false
+        default: "telegram"
+        type: string
+      icon_url:
+        description: Icon URL (optional)
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -19,12 +34,16 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+
     env:
       APP_NAME: ${{ inputs.app_name }}
       CHAT_ID: ${{ inputs.chat_id }}
+      FEATURES: ${{ inputs.features }}
+      TEMPLATE: ${{ inputs.template }}
+      ICON_URL: ${{ inputs.icon_url }}
 
     steps:
-      - name: Check out repository
+      - name: Checkout
         uses: actions/checkout@v5
 
       - name: Set up Java 17
@@ -33,105 +52,54 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Configure Android SDK (with package-install fallback)
+      - name: Setup Android SDK
         shell: bash
         run: |
           set -euo pipefail
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          if [[ ! -d "$SDK_ROOT/cmdline-tools" ]]; then
-            SDK_ROOT="/usr/local/lib/android/sdk"
-          fi
-          if [[ ! -d "$SDK_ROOT/cmdline-tools" ]]; then
-            echo "Android SDK command-line tools were not found on this runner."
-            exit 1
-          fi
-
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
-          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
 
           SDKMANAGER="$(command -v sdkmanager || true)"
           if [[ -z "$SDKMANAGER" ]]; then
-            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print 2>/dev/null | sort -V | tail -n 1)"
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1)"
           fi
-          if [[ -z "$SDKMANAGER" || ! -x "$SDKMANAGER" ]]; then
-            echo "sdkmanager was not found under $SDK_ROOT/cmdline-tools."
-            exit 1
-          fi
-          echo "Using sdkmanager: $SDKMANAGER"
 
           set +o pipefail
           yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null 2>&1 || true
           set -o pipefail
 
-          PACKAGES=("platforms;android-35" "build-tools;35.0.0" "platform-tools")
-          if ! "$SDKMANAGER" --sdk_root="$SDK_ROOT" "${PACKAGES[@]}"; then
-            echo "Batch SDK install failed; retrying each package separately."
-            for package in "${PACKAGES[@]}"; do
-              if ! "$SDKMANAGER" --sdk_root="$SDK_ROOT" "$package"; then
-                sleep 5
-                "$SDKMANAGER" --sdk_root="$SDK_ROOT" "$package"
-              fi
-            done
-          fi
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" \
+            "platforms;android-35" "build-tools;35.0.0" "platform-tools"
 
-      - name: Install Gradle 8.9 (primary and mirror fallback)
-        shell: bash
+      - name: Install Gradle 8.9
         run: |
-          set -euo pipefail
-          ZIP=/tmp/gradle-8.9-bin.zip
-          if ! curl -fL --retry 3 --retry-all-errors \
-            https://services.gradle.org/distributions/gradle-8.9-bin.zip -o "$ZIP"; then
-            rm -f "$ZIP"
-            curl -fL --retry 3 --retry-all-errors \
-              https://downloads.gradle.org/distributions/gradle-8.9-bin.zip -o "$ZIP"
-          fi
-          if ! unzip -tq "$ZIP" >/dev/null; then
-            rm -f "$ZIP"
-            curl -fL --retry 3 --retry-all-errors \
-              https://downloads.gradle.org/distributions/gradle-8.9-bin.zip -o "$ZIP"
-            unzip -tq "$ZIP" >/dev/null
-          fi
-          unzip -q "$ZIP" -d /tmp
-          echo "/tmp/gradle-8.9/bin" >> "$GITHUB_PATH"
+          curl -fL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/g.zip
+          unzip -q /tmp/g.zip -d /tmp
+          echo "/tmp/gradle-8.9/bin" >> $GITHUB_PATH
 
       - name: Generate Android project
         run: python3 build_android.py
 
-      - name: Build debug-signed APK
+      - name: Build APK
         run: gradle --no-daemon assembleDebug
 
-      - name: Save APK as GitHub Actions artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v6
         with:
           name: generated-apk
           path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
           retention-days: 7
 
-      - name: Send APK to Telegram
-        id: telegram
+      - name: Send to Telegram
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHAT_ID: ${{ inputs.chat_id }}
           APP_NAME: ${{ inputs.app_name }}
-        shell: bash
         run: |
-          set -euo pipefail
-          if [[ -z "${TELEGRAM_BOT_TOKEN:-}" ]]; then
-            echo "The TELEGRAM_BOT_TOKEN repository secret is missing."
-            exit 1
-          fi
           APK="app/build/outputs/apk/debug/app-debug.apk"
-          RESPONSE="$(curl --fail --silent --show-error --retry 3 --retry-all-errors \
-            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-            -F "chat_id=${CHAT_ID}" \
-            -F "document=@${APK};filename=app.apk" \
-            --form-string "caption=APK ready: ${APP_NAME}. Debug-signed for testing, not official release.")"
-          printf '%s' "$RESPONSE" | python3 -c 'import json,sys; r=json.load(sys.stdin); print("Telegram upload:", r.get("description", "OK")); sys.exit(0 if r.get("ok") else 1)'
-
-      - name: Report Telegram fallback
-        if: steps.telegram.outcome == 'failure'
-        run: |
-          echo "Telegram delivery failed. The APK is still available in this run under Artifacts as generated-apk." >> "$GITHUB_STEP_SUMMARY"
+          curl -F "chat_id=${CHAT_ID}" \
+               -F "document=@${APK};filename=app.apk" \
+               --form-string "caption=✅ APK آماده: ${APP_NAME}" \
+               "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
